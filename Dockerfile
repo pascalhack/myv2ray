@@ -1,33 +1,26 @@
-FROM golang:latest as builder
+# Dockerfile for v2ray based alpine
+# Copyright (C) 2019 - 2020 Teddysun <i@teddysun.com>
+# Reference URL:
+# https://github.com/v2ray/v2ray-core
+# https://github.com/v2ray/geoip
+# https://github.com/v2ray/domain-list-community
 
+FROM --platform=${TARGETPLATFORM} alpine:latest
 LABEL maintainer="By Lintelstm<passcalhack@gmail.com>"
 
-RUN go get -u v2ray.com/core/...
-RUN mkdir -p /usr/bin/v2ray/
-RUN CGO_ENABLED=0 go build -o /usr/bin/v2ray/v2ray v2ray.com/core/main
-RUN CGO_ENABLED=0 go build -o /usr/bin/v2ray/v2ctl v2ray.com/core/infra/control/main
-RUN cp -r ${GOPATH}/src/v2ray.com/core/release/config/* /usr/bin/v2ray/
-
-FROM alpine
-
-RUN apk update
-RUN apk upgrade
-RUN apk add ca-certificates && update-ca-certificates
-# Change TimeZone
-RUN apk add --update tzdata
-ENV TZ=Asia/Shanghai
-# Clean APK cache
-RUN rm -rf /var/cache/apk/*
-
-RUN mkdir /usr/bin/v2ray/
-RUN mkdir /etc/v2ray/
-RUN mkdir /var/log/v2ray/
-
-COPY --from=builder /usr/bin/v2ray  /usr/bin/v2ray
-
-ENV PATH /usr/bin/v2ray/:$PATH
-
-EXPOSE 8000
+ARG TARGETPLATFORM
+WORKDIR /root
+COPY v2ray.sh /root/v2ray.sh
 COPY config.json /etc/v2ray/config.json
+RUN set -ex \
+	&& apk add --no-cache tzdata ca-certificates \
+	&& mkdir -p /var/log/v2ray \
+	&& chmod +x /root/v2ray.sh \
+	&& /root/v2ray.sh "${TARGETPLATFORM}" \
+	&& rm -fv /root/v2ray.sh \
+	&& wget -O /usr/bin/geosite.dat https://github.com/v2ray/domain-list-community/releases/latest/download/dlc.dat \
+	&& wget -O /usr/bin/geoip.dat https://github.com/v2ray/geoip/releases/latest/download/geoip.dat
 
-CMD ["/usr/bin/v2ray/v2ray", "-config=/etc/v2ray/config.json"]
+VOLUME /etc/v2ray
+ENV TZ=Asia/Shanghai
+CMD [ "v2ray", "-config", "/etc/v2ray/config.json" ]
