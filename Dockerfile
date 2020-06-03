@@ -1,34 +1,33 @@
-FROM alpine:3.8
+FROM golang:latest as builder
 
 LABEL maintainer="By Lintelstm<passcalhack@gmail.com>"
 
-ARG TZ="Asia/Shanghai"
+RUN go get -u v2ray.com/core/...
+RUN mkdir -p /usr/bin/v2ray/
+RUN CGO_ENABLED=0 go build -o /usr/bin/v2ray/v2ray v2ray.com/core/main
+RUN CGO_ENABLED=0 go build -o /usr/bin/v2ray/v2ctl v2ray.com/core/infra/control/main
+RUN cp -r ${GOPATH}/src/v2ray.com/core/release/config/* /usr/bin/v2ray/
 
-ENV TZ ${TZ}
-ENV V2RAY_VERSION v3.29 
-ENV V2RAY_LOG_DIR /var/log/v2ray
-ENV V2RAY_CONFIG_DIR /etc/v2ray/
-ENV V2RAY_DOWNLOAD_URL https://github.com/v2ray/v2ray-core/releases/download/${V2RAY_VERSION}/v2ray-linux-64.zip
+FROM alpine
 
-RUN apk upgrade --update \
-    && apk add \
-        bash \
-        tzdata \
-        curl \
-    && mkdir -p \ 
-        ${V2RAY_LOG_DIR} \
-        ${V2RAY_CONFIG_DIR} \
-        /tmp/v2ray \
-    && curl -L -H "Cache-Control: no-cache" -o /tmp/v2ray/v2ray.zip ${V2RAY_DOWNLOAD_URL} \
-    && unzip /tmp/v2ray/v2ray.zip -d /tmp/v2ray/ \
-    && mv /tmp/v2ray/v2ray-${V2RAY_VERSION}-linux-64/v2ray /usr/bin \
-    && mv /tmp/v2ray/v2ray-${V2RAY_VERSION}-linux-64/vpoint_vmess_freedom.json /etc/v2ray/config.json \
-    && chmod +x /usr/bin/v2ray \
-    && apk del curl \
-    && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
-    && echo ${TZ} > /etc/timezone \
-    && rm -rf /tmp/v2ray /var/cache/apk/*
+RUN apk update
+RUN apk upgrade
+RUN apk add ca-certificates && update-ca-certificates
+# Change TimeZone
+RUN apk add --update tzdata
+ENV TZ=Asia/Shanghai
+# Clean APK cache
+RUN rm -rf /var/cache/apk/*
 
-ADD entrypoint.sh /entrypoint.sh
+RUN mkdir /usr/bin/v2ray/
+RUN mkdir /etc/v2ray/
+RUN mkdir /var/log/v2ray/
 
-ENTRYPOINT ["/entrypoint.sh"]
+COPY --from=builder /usr/bin/v2ray  /usr/bin/v2ray
+
+ENV PATH /usr/bin/v2ray/:$PATH
+
+EXPOSE 8000
+COPY config.json /etc/v2ray/config.json
+
+CMD ["/usr/bin/v2ray/v2ray", "-config=/etc/v2ray/config.json"]
