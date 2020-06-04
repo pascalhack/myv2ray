@@ -1,22 +1,27 @@
-############################
-# STEP 1 build executable binary
-############################
-FROM golang:alpine AS builder
-RUN apk update && apk add --no-cache git bash wget curl
-WORKDIR /go/src/v2ray.com/core
-RUN git clone --progress https://github.com/v2fly/v2ray-core.git . && \
-    bash ./release/user-package.sh nosource noconf codename=$(git describe --tags) buildname=docker-fly abpathtgz=/tmp/v2ray.tgz
-############################
-# STEP 2 build a small image
-############################
-FROM alpine
+FROM alpine:latest
 
-LABEL maintainer "V2Fly Community <admin@v2fly.org>"
-COPY --from=builder /tmp/v2ray.tgz /tmp
-RUN apk update && apk add ca-certificates && \
-    mkdir -p /usr/bin/v2ray && \
-    tar xvfz /tmp/v2ray.tgz -C /usr/bin/v2ray
+ENV CONFIG_JSON=none CERT_PEM=none KEY_PEM=none VER=4.23.4
 
-#ENTRYPOINT ["/usr/bin/v2ray/v2ray"]
-ENV PATH /usr/bin/v2ray:$PATH
-CMD ["v2ray", "-config=/etc/v2ray/config.json"]
+#RUN apk add --no-cache --virtual .build-deps ca-certificates curl \
+# && mkdir -m 777 /v2raybin \ 
+# && cd /v2raybin \
+# && curl -L -H "Cache-Con#trol: no-cache" -o v2ray.zip https://github.com/v2ray/v2ray-core/releases/v$VER/v2ray-linux-64.zip \
+# && unzip v2ray.zip \
+# && mv /v2raybin/v2ray-v$VER-linux-64/v2ray /v2raybin/ \
+# && mv /v2raybin/v2ray-v$VER-linux-64/v2ctl /v2raybin/ \
+# && mv /v2raybin/v2ray-v$VER-linux-64/geoip.dat /v2raybin/ \
+# && mv /v2raybin/v2ray-v$VER-linux-64/geosite.dat /v2raybin/ \
+# && chmod +x /v2raybin/v2ray \
+# && rm -rf v2ray.zip \
+# && rm -rf v2ray-v$VER-linux-64 \
+# && chgrp -R 0 /v2raybin \
+# && chmod -R g+rwX /v2raybin 
+
+RUN mkdir -m 777 /v2ray
+
+ADD entrypoint.sh /entrypoint.sh
+ADD config.json /config.json
+RUN chmod +x /entrypoint.sh 
+ENTRYPOINT  /entrypoint.sh 
+
+EXPOSE 8080
