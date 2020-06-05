@@ -1,6 +1,8 @@
 name: Publish Docker
 
-on: [push]
+on: 
+  release:
+    types: [published]
 jobs:
   build:
     runs-on: ubuntu:18.04
